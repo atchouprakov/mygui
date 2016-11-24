@@ -1,21 +1,9 @@
-/*!
-	@file
-	@author		Albert Semenov
-	@date		05/2009
-*/
+// WARNING: copy of this file is used in OpenGL3 platform, modify both files if possible
 #include "Precompiled.h"
 #include "BaseManager.h"
-#include "MyGUI_Diagnostic.h"
 
 #include <SDL_image.h>
-
-#ifdef MYGUI_CHECK_MEMORY_LEAKS
-#	undef new
-#	undef delete
-#endif
-
-// имя класса окна
-const char* WND_CLASS_NAME = "MyGUI_Demo_window";
+#include "GL/glew.h"
 
 namespace base
 {
@@ -26,23 +14,17 @@ namespace base
 		mContext(nullptr),
 		mExit(false),
 		mWindowOn(false),
-		mResourceFileName("MyGUI_Core.xml")
+		mResourceFileName("MyGUI_Core.xml"),
+		mFpsCounter(0)
 	{
-		// initialize SDL
-		MYGUI_ASSERT(SDL_Init(SDL_INIT_VIDEO | SDL_INIT_TIMER | SDL_INIT_AUDIO | SDL_INIT_EVENTS) == 0, "Failed initializing SDL.");
-		// initialize SDL_image
-		MYGUI_ASSERT(IMG_Init(~0) != 0, "Failed to initializing SDL_image");
 	}
 
 	BaseManager::~BaseManager()
 	{
-		SDL_GL_DeleteContext(mContext);
-		IMG_Quit();
-		SDL_Quit();
 	}
 
 	void BaseManager::_windowResized( int w, int h )
-{
+	{
 		if (mPlatform)
 			mPlatform->getRenderManagerPtr()->setViewSize(w, h);
 
@@ -51,6 +33,21 @@ namespace base
 
 	bool BaseManager::create(int _width, int _height)
 	{
+		// initialize SDL
+		if (SDL_Init(SDL_INIT_VIDEO) != 0)
+		{
+			std::cerr << "Failed to initialize SDL2.";
+			exit(1);
+		}
+		// initialize SDL_image
+#ifndef EMSCRIPTEN
+		if (IMG_Init(~0) == 0)
+		{
+			std::cerr << "Failed to initialize SDL_image.";
+			exit(1);
+		}
+#endif
+
 		const unsigned int width = _width;
 		const unsigned int height = _height;
 		bool windowed = true;
@@ -95,7 +92,7 @@ namespace base
 			{
 				switch (mEvent.type)
 				{
-				// keyboard events
+					// keyboard events
 				case SDL_KEYDOWN:
 					mKeyCode = mEvent.key.keysym.sym;
 					keyPressed(mKeyCode, nullptr);
@@ -107,7 +104,7 @@ namespace base
 				case SDL_KEYUP:
 					keyReleased(mEvent.key);
 					break;
-				// mouse events
+					// mouse events
 				case SDL_MOUSEMOTION:
 					mouseMoved(mEvent.motion);
 					break;
@@ -150,6 +147,9 @@ namespace base
 					break;
 				}
 			}
+			glClearColor(0, 0, 0, 1);
+			glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+
 			drawOneFrame();
 			if (!mWindowOn)
 				SDL_Delay(50);
@@ -168,6 +168,9 @@ namespace base
 
 		destroyRender();
 
+		SDL_GL_DeleteContext(mContext);
+		IMG_Quit();
+		SDL_Quit();
 	}
 
 	void BaseManager::setupResources()
@@ -277,6 +280,14 @@ namespace base
 		mPlatform->getDataManagerPtr()->addResourceLocation(_name, _recursive);
 	}
 
+	MyGUI::MapString BaseManager::getStatistic()
+	{
+		MyGUI::MapString statistics;
+		statistics["FPS"] = MyGUI::utility::toString(mFpsCounter);
+		mFpsCounter = 0;
+		return statistics;
+	}
+
 	void BaseManager::injectMouseMove(int _absx, int _absy, int _absz)
 	{
 		if (!mGUI)
@@ -330,6 +341,7 @@ namespace base
 
 	void BaseManager::drawOneFrame()
 	{
+		mFpsCounter++;
 		if (mPlatform)
 			mPlatform->getRenderManagerPtr()->drawOneFrame();
 
@@ -395,25 +407,25 @@ namespace base
 		SDL_Surface *image = nullptr;
 		SDL_Surface *cvtImage = nullptr;		// converted surface with RGBA/RGB pixel format
 		image = IMG_Load(fullname.c_str());
-		if (image != nullptr) {
-			_width = image->w;
-			_height = image->h;
+		MYGUI_ASSERT(image != nullptr, "Failed to load image: " + fullname);
 
-			int bpp = image->format->BytesPerPixel;
-			if (bpp < 3) 
-			{
-				result = convertPixelData(image, _format);
-			}
-			else 
-			{
-				Uint32 pixelFmt = bpp == 3 ? SDL_PIXELFORMAT_BGR24 : SDL_PIXELFORMAT_ARGB8888;
-				cvtImage = SDL_ConvertSurfaceFormat(image, pixelFmt, 0);
-				result = convertPixelData(cvtImage, _format);
-				SDL_FreeSurface(cvtImage);
-			}
-			SDL_FreeSurface(image);
+		_width = image->w;
+		_height = image->h;
+
+		int bpp = image->format->BytesPerPixel;
+		if (bpp < 3)
+		{
+			result = convertPixelData(image, _format);
 		}
-		MYGUI_ASSERT(result != nullptr, "Failed to load image.");
+		else
+		{
+			Uint32 pixelFmt = bpp == 3 ? SDL_PIXELFORMAT_BGR24 : SDL_PIXELFORMAT_ARGB8888;
+			cvtImage = SDL_ConvertSurfaceFormat(image, pixelFmt, 0);
+			result = convertPixelData(cvtImage, _format);
+			SDL_FreeSurface(cvtImage);
+		}
+		SDL_FreeSurface(image);
+
 		return result;
 	}
 

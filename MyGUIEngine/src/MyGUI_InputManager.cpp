@@ -426,9 +426,13 @@ namespace MyGUI
 		//-------------------------------------------------------------------------------------//
 
 		// сбрасываем старый
-		if (mWidgetKeyFocus)
+		MyGUI::Widget* oldFocus = mWidgetKeyFocus;
+
+		mWidgetKeyFocus = _widget;
+
+		if (oldFocus)
 		{
-			mWidgetKeyFocus->_riseKeyLostFocus(_widget);
+			oldFocus->_riseKeyLostFocus(_widget);
 		}
 
 		// устанавливаем новый
@@ -437,7 +441,6 @@ namespace MyGUI
 			_widget->_riseKeySetFocus(mWidgetKeyFocus);
 		}
 
-		mWidgetKeyFocus = _widget;
 
 		eventChangeKeyFocus(mWidgetKeyFocus);
 	}
@@ -485,7 +488,7 @@ namespace MyGUI
 
 		if (_widget == mWidgetKeyFocus)
 		{
-			mWidgetKeyFocus = nullptr;
+			resetKeyFocusWidget();
 		}
 
 		// ручками сбрасываем, чтобы не менять фокусы

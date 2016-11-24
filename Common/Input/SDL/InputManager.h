@@ -8,7 +8,11 @@
 #define INPUT_MANAGER_H_
 
 #include <MyGUI.h>
+#ifdef EMSCRIPTEN
+#include <SDL2/SDL.h>
+#else
 #include <SDL.h>
+#endif
 
 namespace input
 {
@@ -22,7 +26,7 @@ namespace input
 		void destroyInput();
 		void captureInput();
 		void setInputViewSize(int _width, int _height);
-		
+
 		// following five methods are to be implemented in BaseManager class
 		virtual void injectMouseMove(int _absx, int _absy, int _absz){}
 		virtual void injectMousePress(int _absx, int _absy, MyGUI::MouseButton _id){}

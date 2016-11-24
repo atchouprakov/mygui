@@ -21,6 +21,7 @@ include(CMakeDependentOption)
 include(MacroLogFeature)
 include(MyGUIConfigTargets)
 include(PreprocessorUtils)
+include(Utils)
 set(MYGUI_TEMPLATES_DIR "${MYGUI_SOURCE_DIR}/CMake/Templates")
 set(MYGUI_WORK_DIR ${MYGUI_BINARY_DIR})
 
@@ -72,7 +73,7 @@ if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_C
 	# Fix x64 issues on Linux
 	if("${CMAKE_SYSTEM_PROCESSOR}" STREQUAL "x86_64" AND NOT APPLE)
 		add_definitions(-fPIC)
-	endif()  
+	endif()
 endif ()
 
 # determine system endianess
@@ -106,8 +107,28 @@ endif(WIN32 OR APPLE)
 # Provide user options to customise the build process
 ######################################################################
 
+if (EMSCRIPTEN)
+	set(MYGUI_RENDERSYSTEM 8 CACHE STRING "")
+	set(MYGUI_SAMPLES_INPUT 4 CACHE STRING "")
+	set(MYGUI_USE_FREETYPE False CACHE BOOL "")
+	set(MYGUI_STATIC True CACHE BOOL "")
+	set(MYGUI_DISABLE_PLUGINS True CACHE BOOL "")
+	set(MYGUI_USE_SYSTEM_GLEW True CACHE BOOL "")
+
+	set(OPENGL_gl_LIBRARY Dummy CACHE STRING "")
+	set(OPENGL_glu_LIBRARY Dummy CACHE STRING "")
+	set(GLEW_LIBRARY Dummy CACHE STRING "")
+	set(SDL2_LIBRARY Dummy CACHE STRING "")
+	set(SDL2_IMAGE_LIBRARY Dummy CACHE STRING "")
+	set(SDL2_INCLUDE_DIR "" CACHE STRING "")
+	set(SDL2_IMAGE_INCLUDE_DIR "" CACHE STRING "")
+
+	set(CMAKE_CXX_FLAGS ${CMAKE_CXX_FLAGS} "--std=c++11 -O2 --preload-file ${CMAKE_CURRENT_SOURCE_DIR}/Media/@/ -s FULL_ES3=1 -s ALLOW_MEMORY_GROWTH=1 -s USE_SDL=2 -s USE_SDL_IMAGE=2 -s SDL2_IMAGE_FORMATS='[\"png\"]'")
+endif ()
+
 # Customise what to build
 option(MYGUI_STATIC "Static build" FALSE)
+option(MYGUI_DISABLE_PLUGINS "Disable plugins support" FALSE)
 option(MYGUI_USE_FREETYPE "Use freetype for font rendering" TRUE)
 option(MYGUI_DONT_USE_OBSOLETE "Remove obsole functions from build" FALSE)
 
@@ -119,7 +140,8 @@ set(MYGUI_RENDERSYSTEM 3 CACHE STRING
   4 - OpenGL
   5 - Direct3D 9
   6 - Direct3D 11
-  7 - OpenGL 3.x"
+  7 - OpenGL 3.x
+  8 - OpenGL ES 2.0 (Emscripten)"
 )
 
 if(MYGUI_RENDERSYSTEM EQUAL 4 OR MYGUI_RENDERSYSTEM EQUAL 7)
@@ -156,7 +178,7 @@ else()
 	set(MYGUI_SAMPLES_INPUT 1)
 endif()
 
-if(MYGUI_RENDERSYSTEM EQUAL 4)
+if(MYGUI_RENDERSYSTEM EQUAL 4 OR MYGUI_RENDERSYSTEM EQUAL 7 OR MYGUI_RENDERSYSTEM EQUAL 8)
 	set(MYGUI_SAMPLES_INPUT 4)
 endif()
 
@@ -184,18 +206,25 @@ if (MYGUI_DONT_USE_OBSOLETE)
 endif ()
 # End of Global defines
 
+# Find dependencies
+include(Dependencies)
+
 # Set compiler specific build flags
 if (CMAKE_COMPILER_IS_GNUCXX OR CMAKE_CXX_COMPILER_ID MATCHES "Clang" OR CMAKE_CXX_COMPILER_ID MATCHES "Intel")
 	if (NOT MYGUI_HIGH_LEVEL_WARNINGS)
 		set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -w")
 	else ()
+		if (MYGUI_USE_FREETYPE)
+			ignore_warnings(${FREETYPE_INCLUDE_DIRS})
+			ignore_warnings(${FREETYPE_FT2BUILD_INCLUDE_DIR})
+		endif ()
 		if (MYGUI_RENDERSYSTEM EQUAL 3)
 			# to avoid warnings from OGRE
-			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem ${OGRE_INCLUDE_DIR}")
+			ignore_warnings(${OGRE_INCLUDE_DIR})
 		endif ()
 		if (MYGUI_SAMPLES_INPUT EQUAL 1 OR MYGUI_SAMPLES_INPUT EQUAL 3)
 			# to avoid warnings from OIS
-			set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -isystem ${OIS_INCLUDE_DIR}")
+			ignore_warnings(${OIS_INCLUDE_DIR})
 		endif ()
 
 		if (CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -222,7 +251,7 @@ endif ()
 
 if (MSVC)
 	add_definitions("-D_CRT_SECURE_NO_WARNINGS")
-	
+
 	# Use the highest warning level for visual studio.
 	if (MYGUI_HIGH_LEVEL_WARNINGS)
 		SET(WARNING_LEVEL "/W4")
@@ -248,9 +277,6 @@ if (CMAKE_SYSTEM_NAME STREQUAL "OpenBSD")
 	# Otherwise, boost complains that there is no threading support.
 	SET(CMAKE_CXX_FLAGS "-pthread ${CMAKE_CXX_FLAGS}")
 endif ()
-
-# Find dependencies
-include(Dependencies)
 
 cmake_dependent_option(MYGUI_BUILD_DOCS "Generate documentation" TRUE "DOXYGEN_FOUND" FALSE)
 
@@ -325,6 +351,6 @@ include(Packaging)
 # copy dlls required by SDL2 and SDL2_image
 if(WIN32)
     if(MYGUI_RENDERSYSTEM EQUAL 4)
-    
+
     endif(MYGUI_RENDERSYSTEM EQUAL 4)
 endif(WIN32)
